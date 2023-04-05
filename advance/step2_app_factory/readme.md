@@ -106,4 +106,103 @@
     - 설치
         - pip install sqlalchemy  flask-migrate
     - 코드 작성
-     
+        ```
+            from flask_sqlalchemy import SQLAlchemy
+            from flask_migrate import Migrate
+
+            db = SQLAlchemy()
+            migrate = Migrate()
+            ...
+            db.init_app( app )
+            migrate.init_app( app, db )
+        ```
+
+        ```
+            # 환경변수 추가
+            # ORM 처리응 위한 환경변수 설정,(임의설정)
+            DB_PROTOCAL = "mysql+pymysql"
+            DB_USER     = "root"
+            DB_PASSWORD = "12341234"
+            DB_HOST     = "127.0.0.1"
+            DB_PORT     = 3306
+            DB_DATABASE = "my_db" # 새로 만들, 이 서비스에서 사용한 데이터베이스명
+
+            # 이 환경변수는 migrate가 필수로 요구하는 환경변수
+            SQLALCHEMY_DATABASE_URI=f"{DB_PROTOCAL}://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_DATABASE}"
+            # sqlalchemy 추가 설정
+            SQLALCHEMY_TRACK_MODIFICATIONS=False
+        ```
+        - 데이터 베이스 생성, 초기화 (최초 1회)
+            - --app service 은 없어도 되는데, 이 앱은 app or wsfi로 시작하는 엔트리가 없어서 별도로 지정해야한다
+            - flask --app service db init 
+                - sqlite : 소형데이터베이스, 스마트폰에 사용하는 DB 이 경우에는 데이터베이스 생성을 자동으로 해줌, 파일럿 형태에서 사용
+                - mysql 같은 데이터베이스(케이스별로 상이)는 실제로는 생성 않됨
+
+            - migrations 폴더가 생긴다(내부는 자동으로 만드어지는 구조이므로, 관여하지 않는다), 단 versions 밑으로 수정할때마다 새로운 버전의 DB 관련 생성된다
+        
+        - 모델(테이블) 생성, 변경
+            - model > models.py에 테이블 관련 내용 기술
+            - service>__init__.py
+                - from .model import models : 주석해제, 신규작성
+            - flask --app service db migrate
+                ```
+                    +-----------------+
+                    | Tables_in_my_db |
+                    +-----------------+
+                    | alembic_version |
+                    +-----------------+
+                    1 row in set (0.000 sec)
+                ```
+
+        - 모델(테이블) 생성, 변경후 데이터베이스에 적용
+            - flask --app service db upgrade
+        - 컨테이너 이미지 생성시
+            - 위의 명령들 3개를 차례대로 수행해서 데이터베이스 초기화, 생성과정을 수행
+
+    - 필요한 기능들 시뮬레이션
+        - DBA는 sql문을 작성해서 쿼리 구현 
+        - ORM에서는 shell을 열어서 파이썬 코드로 구현
+        - flask --app service shell  
+            - 질문 등록
+                ```
+                from service.model.models import Question, Answer
+                from datetime import datetime                
+                from service import db
+                
+                q1 = Question(title="질문1", content="내용1", reg_date=datetime.now()) 
+                db.session.add( q1 ) 
+                db.session.commit()
+                ```
+            - 질문 조회 
+                ```
+                # 전체 데이터 조회 : select * from question;
+                qs = Question.query.all()
+                qs[0]
+                <Question 1>
+                qs[0].title
+                '질문1'
+                # id값을 넣어서 조회 : select * from question where id=1;
+                Question.query.get(1)
+                # 내용중에 '용' 문자열이 존재하면 다가져오시오
+                # select * from question where content like '%용%';
+                # %용, %용%, 용% <- 내용 검색
+                Question.query.filter( Question.content.like('%용%')).all()
+                ```
+            - 질문 수정
+                ```
+                    q1 = Question.query.get(1)
+                    # 변경하고 싶은 부분은 수정
+                    # update question set title='질문1111111' where id=1;
+                    q1.title = "질문1111111"
+                    db.session.commit()
+                ```
+            - 질문 삭제
+                ```
+                    q1 = Question.query.get(1)
+                    # delete from question where id=1;
+                    db.session.delete( q1 )
+                    db.session.commit()
+                ```
+            - 답변 등록
+                # 질문 2개 추가
+                ...  
